@@ -27,6 +27,39 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
 
 
+async def dismiss_overlays(page):
+    """Dismiss cookie consent banner and any modal dialogs."""
+    # Cookie consent — try common button selectors
+    try:
+        consent = page.locator(
+            ".cc-btn.cc-allow, .cc-btn.cc-dismiss, .cc-accept, "
+            ".cc-window button, [aria-label='cookieconsent'] button"
+        )
+        if await consent.count() > 0:
+            await consent.first.click(timeout=3000)
+            await page.wait_for_timeout(500)
+            print("  Dismissed cookie consent banner")
+    except Exception:
+        pass
+
+    # Modal dialogs — press Escape first, then try clicking the background
+    try:
+        if await page.locator(".modal.is-active").count() > 0:
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
+            print("  Dismissed modal via Escape")
+    except Exception:
+        pass
+
+    try:
+        bg = page.locator(".modal-background")
+        if await bg.count() > 0:
+            await bg.first.click(timeout=2000)
+            await page.wait_for_timeout(300)
+    except Exception:
+        pass
+
+
 async def scrape_us_listings():
     """Navigate the CAPLE registration form and return US CIPLE exam centers/dates."""
     centers = []
@@ -37,6 +70,7 @@ async def scrape_us_listings():
 
         print(f"Loading {REGISTRATION_URL}...")
         await page.goto(REGISTRATION_URL, wait_until="networkidle", timeout=30000)
+        await dismiss_overlays(page)
 
         # --- Step 1: Select CIPLE exam ---
         print("Selecting CIPLE exam type...")
@@ -47,20 +81,23 @@ async def scrape_us_listings():
         exam_select = selects.first
         all_options = await exam_select.locator("option").all()
 
-        ciple_value = None
+        # Angular binds complex objects so option values show as "[object Object]".
+        # Select by visible label text instead.
+        ciple_label = None
         print("  Exam dropdown options:")
         for opt in all_options:
             text = (await opt.inner_text()).strip()
             val = await opt.get_attribute("value")
             print(f"    '{text}' (value='{val}')")
-            if "CIPLE" in text.upper() and ciple_value is None:
-                ciple_value = val
+            # Match "CIPLE" exactly, not "CIPLE-e" or other variants
+            if text.upper() == "CIPLE" and ciple_label is None:
+                ciple_label = text
 
-        if ciple_value is None:
+        if ciple_label is None:
             raise ValueError("CIPLE option not found in exam dropdown")
 
-        print(f"  Selecting CIPLE (value='{ciple_value}')...")
-        await exam_select.select_option(value=ciple_value)
+        print(f"  Selecting '{ciple_label}' by label...")
+        await exam_select.select_option(label=ciple_label)
         await page.wait_for_load_state("networkidle", timeout=15000)
 
         # --- Step 2: Select United States ---
@@ -86,6 +123,9 @@ async def scrape_us_listings():
         await page.wait_for_load_state("networkidle", timeout=15000)
 
         # --- Step 3: Proceed to center listing ---
+        print("Dismissing any overlays before clicking submit...")
+        await dismiss_overlays(page)
+
         print("Looking for Next/Submit button...")
         submit = page.locator(
             "button[type='submit'], input[type='submit'],"
@@ -94,7 +134,7 @@ async def scrape_us_listings():
 
         if await submit.count() > 0:
             print("  Clicking submit...")
-            await submit.first.click()
+            await submit.first.click(timeout=10000)
             await page.wait_for_load_state("networkidle", timeout=20000)
         else:
             print("  No submit button found — checking current page for centers")
