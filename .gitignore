@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Debug screenshots from scraper runs
+debug_*.png
+
+# Environment
+.env
