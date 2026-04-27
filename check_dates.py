@@ -13,7 +13,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
 STATE_FILE = Path("state.json")
-US_COUNTRY_VALUE = "69"
+US_COUNTRY_VALUE = "3"
 REGISTRATION_URL = "https://caple.letras.ulisboa.pt/inscricao"
 
 
