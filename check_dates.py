@@ -10,8 +10,10 @@ from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 
+# Persists the last-known list of centers so we can detect changes between runs
 STATE_FILE = Path("state.json")
 REGISTRATION_URL = "https://caple.letras.ulisboa.pt/inscricao"
+# API endpoint that returns exam centers filtered by country and exam type
 CENTERS_URL = (
     "https://caple.letras.ulisboa.pt/centers/getCentersExamsByCountry.json"
     "?country_id={country_id}&exam_id={exam_id}"
@@ -22,6 +24,7 @@ CIPLE_EXAM_ID = "2"
 
 
 def load_state():
+    # Returns the saved state, or a blank default if no state file exists yet
     if STATE_FILE.exists():
         return json.loads(STATE_FILE.read_text())
     return {"centers": [], "last_checked": None}
@@ -33,6 +36,7 @@ def save_state(state):
 
 def fetch_centers(country_id: str, exam_id: str) -> list[dict]:
     url = CENTERS_URL.format(country_id=country_id, exam_id=exam_id)
+    # Spoof a browser User-Agent and set Referer so the API doesn't reject the request
     req = urllib.request.Request(
         url,
         headers={
@@ -48,6 +52,7 @@ def fetch_centers(country_id: str, exam_id: str) -> list[dict]:
     with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
+    # Extract just city and name from each center entry; skip empty records
     centers = []
     for item in data.get("centers", []):
         c = item.get("Center", {})
@@ -61,6 +66,7 @@ def fetch_centers(country_id: str, exam_id: str) -> list[dict]:
 def send_email(subject, body):
     gmail_user = os.environ["GMAIL_USER"]
     gmail_password = os.environ["GMAIL_APP_PASSWORD"]
+    # Falls back to sending to the sender's own address if NOTIFY_EMAIL isn't set
     notify_email = os.environ.get("NOTIFY_EMAIL", gmail_user)
 
     msg = MIMEText(body, "plain", "utf-8")
@@ -78,6 +84,7 @@ def send_email(subject, body):
 
 
 def format_centers(centers):
+    # Returns a human-readable bullet list of centers for use in the email body
     if not centers:
         return "  (none found)"
     lines = []
@@ -109,14 +116,17 @@ def main():
     for c in centers:
         print(f"  {c['city']} — {c['name']}")
 
+    # Compare as sorted JSON strings so order differences don't trigger false positives
     prev_json = json.dumps(prev_centers, sort_keys=True)
     curr_json = json.dumps(centers, sort_keys=True)
     listings_changed = prev_json != curr_json
 
+    # Always persist the latest data and timestamp, even if nothing changed
     state["centers"] = centers
     state["last_checked"] = now
     save_state(state)
 
+    # Only notify if new centers appeared, or if the user explicitly forced a test alert
     should_notify = (listings_changed and centers) or force_notify
 
     if not should_notify:
@@ -124,6 +134,7 @@ def main():
         return
 
     if force_notify and not listings_changed:
+        # Test email: confirms the workflow is running but no real change occurred
         subject = "[TEST] CIPLE Alert — Checker is Running"
         body = (
             f"Test notification from the CIPLE exam date checker.\n\n"
@@ -139,6 +150,7 @@ def main():
             f"Checked: {now}"
         )
     else:
+        # Real alert: centers have appeared for the first time (or changed)
         subject = "CIPLE Exam Listings Now Available in the United States"
         body = (
             f"CIPLE exam center listings have appeared for the United States.\n\n"
