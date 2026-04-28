@@ -121,53 +121,32 @@ async def scrape_us_listings():
 
         await country_select.select_option(value=US_COUNTRY_VALUE)
 
-        # The app shows a loading modal while fetching center data for the selected country.
-        # Wait for it to appear, then wait for it to close on its own before proceeding.
-        print("  Waiting for country data to load...")
+        # After selecting the country the app opens a modal containing the center list.
+        # The modal stays open (it IS the center-selection UI, not a loading spinner).
+        # Wait for at least one country-item label to appear inside it.
+        print("  Waiting for center modal to appear...")
         try:
-            await page.wait_for_selector(".modal.is-active", state="visible", timeout=5000)
-            print("  Loading modal appeared — waiting for it to close...")
-            await page.wait_for_selector(".modal.is-active", state="hidden", timeout=15000)
-            print("  Loading complete")
+            await page.wait_for_selector(
+                ".modal.is-active label.radio.country-item",
+                state="visible",
+                timeout=15000,
+            )
+            print("  Center modal is visible")
         except PlaywrightTimeoutError:
-            print("  No loading modal detected — continuing")
-            await page.wait_for_load_state("networkidle", timeout=10000)
+            print("  No centers appeared in modal — none available for this selection")
+            await browser.close()
+            return []
 
-        # --- Step 3: Proceed to center listing ---
-        print("Looking for Next/Submit button...")
-        submit = page.locator(
-            "button[type='submit'], input[type='submit'],"
-            " button:text-matches('continuar|seguinte|avançar|next', 'i')"
-        )
-
-        if await submit.count() > 0:
-            print("  Clicking submit...")
-            await submit.first.click(timeout=10000)
-            # Wait for the centers section to become visible rather than networkidle.
-            # The form is a SPA — step 1 stays in the DOM hidden after advancing,
-            # so networkidle alone doesn't tell us step 2 content is ready.
-            try:
-                await page.wait_for_selector(
-                    "label.radio.country-item",
-                    state="visible",
-                    timeout=15000,
-                )
-                print("  Center listing section is visible")
-            except PlaywrightTimeoutError:
-                print("  No center listing section appeared — likely no centers for this selection")
-        else:
-            print("  No submit button found — checking current page for centers")
-
-        # --- Step 4: Extract center listings ---
-        # Centers render as <label class="radio country-item"> elements.
-        # Each label contains .column divs — the first (is-1) holds the radio button,
-        # the rest hold city and center name text.
-        print("Extracting exam centers...")
-        center_labels = await page.locator("label.radio.country-item").all()
+        # --- Step 3: Extract centers from modal ---
+        # Each center is a <label class="radio country-item"> with .column divs.
+        # The is-1 column holds the radio button; remaining columns hold city / name.
+        print("Extracting exam centers from modal...")
+        center_labels = await page.locator(
+            ".modal.is-active label.radio.country-item"
+        ).all()
         print(f"  Found {len(center_labels)} center label(s)")
 
         for label in center_labels:
-            # Collect text from all columns except the radio-button column (is-1)
             columns = await label.locator(".column:not(.is-1)").all()
             parts = []
             for col in columns:
@@ -176,17 +155,15 @@ async def scrape_us_listings():
                     parts.append(t)
 
             if not parts:
-                # Fallback: grab all inner text from the label
                 parts = [(await label.inner_text()).strip()]
 
-            # First part is typically the city, second the center name
             city = parts[0] if len(parts) > 0 else ""
             name = parts[1] if len(parts) > 1 else ""
             centers.append({"city": city, "name": name})
 
         if not centers:
             page_text = await page.inner_text("body")
-            print("  No centers found. Page excerpt (first 800 chars):")
+            print("  No centers parsed. Page excerpt (first 800 chars):")
             print(page_text[:800])
 
         await browser.close()
