@@ -44,57 +44,15 @@ def scrape_us_listings() -> list[dict]:
     data = fetch_inscricao_json()
     print(f"inscricao.json keys={list(data.keys())}")
 
-    # 'countries' is a plain {id: name} dict — just confirm our country id exists.
-    countries = data.get("countries", {})
-    country_name = countries.get(US_COUNTRY_VALUE, "")
-    print(f"Country id={US_COUNTRY_VALUE}: '{country_name}' ({len(countries)} total)")
-    if not country_name:
-        print(f"  Country id not found. Sample: { {k: v for k, v in list(countries.items())[:5]} }")
+    # Print the full first exam item to see if Lapes/centers are nested inside exams.
+    exams = data.get("exams", [])
+    if isinstance(exams, dict):
+        exams = list(exams.values())
+    if exams:
+        print(f"\nFirst exam item keys: {list(exams[0].keys())}")
+        print(f"Full first exam item:\n{json.dumps(exams[0], indent=2, ensure_ascii=False)[:3000]}\n")
 
-    # 'center_countries' is expected to hold centers keyed by country.
-    center_countries = data.get("center_countries", {})
-    print(f"center_countries type={type(center_countries).__name__}, len={len(center_countries)}")
-    print(f"center_countries sample keys: {list(center_countries.keys())[:10]}")
-
-    # Print the full entry for our country so we can see the structure.
-    cc_entry = center_countries.get(US_COUNTRY_VALUE)
-    if cc_entry is None:
-        # Try matching by name or iterate for a known-populated country to see structure.
-        print(f"  No entry for key '{US_COUNTRY_VALUE}'. All keys: {list(center_countries.keys())[:20]}")
-        # Print first non-empty entry as a structure reference.
-        for k, v in center_countries.items():
-            if v:
-                print(f"  Sample entry (key={k}):\n{json.dumps(v, indent=2, ensure_ascii=False)[:800]}")
-                break
-        return []
-
-    print(f"\ncenter_countries['{US_COUNTRY_VALUE}'] structure:\n{json.dumps(cc_entry, indent=2, ensure_ascii=False)[:1500]}\n")
-
-    # ---- Extract centers from the entry ----
-    # Structure TBD — will be clear from the debug output above.
-    # Try the most common CakePHP nesting patterns.
-    centers_raw = cc_entry if isinstance(cc_entry, list) else []
-
-    centers = []
-    for item in centers_raw:
-        center_obj = item.get("Center") or item.get("Lape") or item
-        if not isinstance(center_obj, dict):
-            continue
-
-        # Filter to centers that offer CIPLE (exam id=2).
-        exam_ids = {
-            str(e.get("exam_id") or e.get("Exam", {}).get("id", ""))
-            for e in item.get("Exams", item.get("ExamLapes", item.get("ExamCenter", [])))
-        }
-        if exam_ids and CIPLE_EXAM_ID not in exam_ids:
-            continue
-
-        city = str(center_obj.get("city") or center_obj.get("City") or "").strip()
-        name = str(center_obj.get("name") or center_obj.get("Name") or "").strip()
-        if city or name:
-            centers.append({"city": city, "name": name})
-
-    return centers
+    return []
 
 
 def send_email(subject, body):
