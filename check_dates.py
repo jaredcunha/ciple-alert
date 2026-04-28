@@ -42,41 +42,38 @@ def fetch_inscricao_json() -> dict:
 
 def scrape_us_listings() -> list[dict]:
     data = fetch_inscricao_json()
+    print(f"inscricao.json keys={list(data.keys())}")
 
-    countries = data.get("countries", [])
-    # CakePHP serializes arrays as {"0": ..., "1": ...} objects — normalize to a list.
-    if isinstance(countries, dict):
-        countries = list(countries.values())
-    print(f"inscricao.json: {len(countries)} countries, keys={list(data.keys())}")
+    # 'countries' is a plain {id: name} dict — just confirm our country id exists.
+    countries = data.get("countries", {})
+    country_name = countries.get(US_COUNTRY_VALUE, "")
+    print(f"Country id={US_COUNTRY_VALUE}: '{country_name}' ({len(countries)} total)")
+    if not country_name:
+        print(f"  Country id not found. Sample: { {k: v for k, v in list(countries.items())[:5]} }")
 
-    # ---- Find the target country ----
-    # The dropdown <option> values may be array indices OR Country.id values.
-    # Try both so we can see what matches.
-    by_index = countries[int(US_COUNTRY_VALUE)] if US_COUNTRY_VALUE.isdigit() and int(US_COUNTRY_VALUE) < len(countries) else None
-    by_id = next((c for c in countries if str(c.get("Country", c).get("id", "")) == US_COUNTRY_VALUE), None)
+    # 'center_countries' is expected to hold centers keyed by country.
+    center_countries = data.get("center_countries", {})
+    print(f"center_countries type={type(center_countries).__name__}, len={len(center_countries)}")
+    print(f"center_countries sample keys: {list(center_countries.keys())[:10]}")
 
-    print(f"By index [{US_COUNTRY_VALUE}]: {json.dumps(by_index, ensure_ascii=False)[:120] if by_index else 'out of range'}")
-    print(f"By id=={US_COUNTRY_VALUE}:    {json.dumps(by_id, ensure_ascii=False)[:120] if by_id else 'not found'}")
-
-    target = by_id or by_index
-    if target is None:
-        print("Target country not found. First 5 countries:")
-        for i, c in enumerate(countries[:5]):
-            co = c.get("Country", c)
-            print(f"  [{i}] id={co.get('id','?')} name={co.get('name','?')}")
+    # Print the full entry for our country so we can see the structure.
+    cc_entry = center_countries.get(US_COUNTRY_VALUE)
+    if cc_entry is None:
+        # Try matching by name or iterate for a known-populated country to see structure.
+        print(f"  No entry for key '{US_COUNTRY_VALUE}'. All keys: {list(center_countries.keys())[:20]}")
+        # Print first non-empty entry as a structure reference.
+        for k, v in center_countries.items():
+            if v:
+                print(f"  Sample entry (key={k}):\n{json.dumps(v, indent=2, ensure_ascii=False)[:800]}")
+                break
         return []
 
-    print(f"\nTarget country full structure:\n{json.dumps(target, indent=2, ensure_ascii=False)[:1500]}\n")
+    print(f"\ncenter_countries['{US_COUNTRY_VALUE}'] structure:\n{json.dumps(cc_entry, indent=2, ensure_ascii=False)[:1500]}\n")
 
-    # ---- Extract centers / lapes ----
-    centers_raw = (
-        target.get("Centers")
-        or target.get("Lapes")
-        or target.get("lapes")
-        or target.get("centers")
-        or []
-    )
-    print(f"Centers/lapes found for country: {len(centers_raw)}")
+    # ---- Extract centers from the entry ----
+    # Structure TBD — will be clear from the debug output above.
+    # Try the most common CakePHP nesting patterns.
+    centers_raw = cc_entry if isinstance(cc_entry, list) else []
 
     centers = []
     for item in centers_raw:
@@ -84,8 +81,7 @@ def scrape_us_listings() -> list[dict]:
         if not isinstance(center_obj, dict):
             continue
 
-        # Only include centers that offer CIPLE (exam id=2).
-        # If no exam list exists on the item, include it anyway.
+        # Filter to centers that offer CIPLE (exam id=2).
         exam_ids = {
             str(e.get("exam_id") or e.get("Exam", {}).get("id", ""))
             for e in item.get("Exams", item.get("ExamLapes", item.get("ExamCenter", [])))
