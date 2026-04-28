@@ -68,6 +68,21 @@ async def scrape_us_listings():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
+        # Capture all JSON responses — Angular fetches center data via XHR when
+        # the country is selected, so we read from the API rather than the DOM.
+        json_responses: list[dict] = []
+
+        async def capture_response(response):
+            if "json" in response.headers.get("content-type", ""):
+                try:
+                    data = await response.json()
+                    json_responses.append({"url": response.url, "data": data})
+                    print(f"  [API] {response.url}")
+                except Exception:
+                    pass
+
+        page.on("response", capture_response)
+
         print(f"Loading {REGISTRATION_URL}...")
         await page.goto(REGISTRATION_URL, wait_until="networkidle", timeout=30000)
         await dismiss_overlays(page)
@@ -75,8 +90,7 @@ async def scrape_us_listings():
         # --- Step 1: Select CIPLE exam ---
         print("Selecting CIPLE exam type...")
         selects = page.locator("select")
-        select_count = await selects.count()
-        print(f"  Found {select_count} select element(s) on page")
+        print(f"  Found {await selects.count()} select element(s) on page")
 
         exam_select = selects.first
         all_options = await exam_select.locator("option").all()
@@ -84,12 +98,10 @@ async def scrape_us_listings():
         # Angular binds complex objects so option values show as "[object Object]".
         # Select by visible label text instead.
         ciple_label = None
-        print("  Exam dropdown options:")
         for opt in all_options:
             text = (await opt.inner_text()).strip()
             val = await opt.get_attribute("value")
             print(f"    '{text}' (value='{val}')")
-            # Match "CIPLE" exactly, not "CIPLE-e" or other variants
             if text.upper() == "CIPLE" and ciple_label is None:
                 ciple_label = text
 
@@ -100,8 +112,8 @@ async def scrape_us_listings():
         await exam_select.select_option(label=ciple_label)
         await page.wait_for_load_state("networkidle", timeout=15000)
 
-        # --- Step 2: Select United States ---
-        print(f"Selecting United States (value={US_COUNTRY_VALUE})...")
+        # --- Step 2: Select country ---
+        print(f"Selecting country (value={US_COUNTRY_VALUE})...")
 
         country_select = None
         for i in range(await selects.count()):
@@ -116,54 +128,69 @@ async def scrape_us_listings():
 
         if country_select is None:
             raise ValueError(
-                f"No select element found with option value='{US_COUNTRY_VALUE}' (United States)"
+                f"No select element found with option value='{US_COUNTRY_VALUE}'"
             )
 
+        json_responses.clear()  # only want responses triggered by country selection
         await country_select.select_option(value=US_COUNTRY_VALUE)
+        await page.wait_for_load_state("networkidle", timeout=15000)
 
-        # After selecting the country the app opens a modal containing the center list.
-        # The modal stays open (it IS the center-selection UI, not a loading spinner).
-        # Wait for at least one country-item label to appear inside it.
-        print("  Waiting for center modal to appear...")
-        try:
-            await page.wait_for_selector(
-                ".modal.is-active label.radio.country-item",
-                state="visible",
-                timeout=15000,
-            )
-            print("  Center modal is visible")
-        except PlaywrightTimeoutError:
-            print("  No centers appeared in modal — none available for this selection")
-            await browser.close()
-            return []
+        print(f"  Captured {len(json_responses)} JSON response(s) after country selection")
 
-        # --- Step 3: Extract centers from modal ---
-        # Each center is a <label class="radio country-item"> with .column divs.
-        # The is-1 column holds the radio button; remaining columns hold city / name.
-        print("Extracting exam centers from modal...")
-        center_labels = await page.locator(
-            ".modal.is-active label.radio.country-item"
-        ).all()
-        print(f"  Found {len(center_labels)} center label(s)")
+        # --- Step 3: Parse centers from API response ---
+        # Angular calls an endpoint that returns a list of center objects shaped like:
+        # [{"Center": {"city": "...", "name": "..."}}, ...]
+        # Walk every captured response and pick the first one that looks like centers.
+        for resp in json_responses:
+            data = resp["data"]
+            if not isinstance(data, list) or not data:
+                continue
+            first = data[0]
+            if not isinstance(first, dict):
+                continue
 
-        for label in center_labels:
-            columns = await label.locator(".column:not(.is-1)").all()
-            parts = []
-            for col in columns:
-                t = (await col.inner_text()).strip()
-                if t:
-                    parts.append(t)
+            # Detect center-shaped payloads
+            center_obj = first.get("Center", first)
+            if not isinstance(center_obj, dict):
+                continue
+            if not any(k in center_obj for k in ("city", "name", "City", "Name")):
+                continue
 
-            if not parts:
-                parts = [(await label.inner_text()).strip()]
+            print(f"  Using center data from: {resp['url']}")
+            for item in data:
+                c = item.get("Center", item)
+                city = c.get("city") or c.get("City") or ""
+                name = c.get("name") or c.get("Name") or ""
+                if city or name:
+                    centers.append({"city": str(city).strip(), "name": str(name).strip()})
+            break
 
-            city = parts[0] if len(parts) > 0 else ""
-            name = parts[1] if len(parts) > 1 else ""
-            centers.append({"city": city, "name": name})
+        # --- Fallback: try CSS selector on the DOM ---
+        if not centers:
+            print("  No centers in API responses — trying DOM selector...")
+            try:
+                await page.wait_for_selector(
+                    "label.radio.country-item", state="visible", timeout=8000
+                )
+            except PlaywrightTimeoutError:
+                pass
+
+            for label in await page.locator("label.radio.country-item").all():
+                columns = await label.locator(".column:not(.is-1)").all()
+                parts = [
+                    t for col in columns
+                    if (t := (await col.inner_text()).strip())
+                ]
+                if not parts:
+                    parts = [(await label.inner_text()).strip()]
+                centers.append({
+                    "city": parts[0] if parts else "",
+                    "name": parts[1] if len(parts) > 1 else "",
+                })
 
         if not centers:
             page_text = await page.inner_text("body")
-            print("  No centers parsed. Page excerpt (first 800 chars):")
+            print("  No centers found anywhere. Page excerpt (first 800 chars):")
             print(page_text[:800])
 
         await browser.close()
