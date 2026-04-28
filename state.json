@@ -1,4 +1,60 @@
 {
-  "centers": [],
-  "last_checked": null
+  "centers": [
+    {
+      "city": "ACESSO",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "CIPLE",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "DEPLE",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "DIPLE",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "DAPLE",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "DUPLE",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "CIPLE-e",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "DEPLE-e",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "DIPLE-e",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "TEJO",
+      "name": "",
+      "value": "[object Object]"
+    },
+    {
+      "city": "ACESSO-e",
+      "name": "",
+      "value": "[object Object]"
+    }
+  ],
+  "last_checked": "2026-04-28 00:01 UTC"
 }
