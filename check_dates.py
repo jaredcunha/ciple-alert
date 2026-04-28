@@ -17,7 +17,7 @@ CENTERS_URL = (
     "?country_id={country_id}&exam_id={exam_id}"
 )
 
-US_COUNTRY_ID = "3"
+US_COUNTRY_ID = "69"
 CIPLE_EXAM_ID = "2"
 
 
