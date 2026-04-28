@@ -120,12 +120,20 @@ async def scrape_us_listings():
             )
 
         await country_select.select_option(value=US_COUNTRY_VALUE)
-        await page.wait_for_load_state("networkidle", timeout=15000)
+
+        # The app shows a loading modal while fetching center data for the selected country.
+        # Wait for it to appear, then wait for it to close on its own before proceeding.
+        print("  Waiting for country data to load...")
+        try:
+            await page.wait_for_selector(".modal.is-active", state="visible", timeout=5000)
+            print("  Loading modal appeared — waiting for it to close...")
+            await page.wait_for_selector(".modal.is-active", state="hidden", timeout=15000)
+            print("  Loading complete")
+        except PlaywrightTimeoutError:
+            print("  No loading modal detected — continuing")
+            await page.wait_for_load_state("networkidle", timeout=10000)
 
         # --- Step 3: Proceed to center listing ---
-        print("Dismissing any overlays before clicking submit...")
-        await dismiss_overlays(page)
-
         print("Looking for Next/Submit button...")
         submit = page.locator(
             "button[type='submit'], input[type='submit'],"
@@ -134,9 +142,7 @@ async def scrape_us_listings():
 
         if await submit.count() > 0:
             print("  Clicking submit...")
-            # force=True bypasses the overlay intercept check — the button is ready,
-            # a persistent Angular modal-background is just sitting in front of it.
-            await submit.first.click(force=True, timeout=10000)
+            await submit.first.click(timeout=10000)
             # Wait for the centers section to become visible rather than networkidle.
             # The form is a SPA — step 1 stays in the DOM hidden after advancing,
             # so networkidle alone doesn't tell us step 2 content is ready.
