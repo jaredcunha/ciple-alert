@@ -34,10 +34,21 @@ def save_state(state):
 def fetch_inscricao_json() -> dict:
     req = urllib.request.Request(
         DATA_URL,
-        headers={"Accept": "application/json", "Referer": REGISTRATION_URL},
+        headers={
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": REGISTRATION_URL,
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+        },
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        raw = resp.read()
+        print(f"inscricao.json response size: {len(raw):,} bytes")
+        return json.loads(raw.decode("utf-8"))
 
 
 def scrape_us_listings() -> list[dict]:
