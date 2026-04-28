@@ -68,16 +68,22 @@ async def scrape_us_listings():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
-        # Capture all JSON responses — Angular fetches center data via XHR when
-        # the country is selected, so we read from the API rather than the DOM.
-        json_responses: list[dict] = []
+        # Capture all network responses so we can find the centers endpoint.
+        all_responses: list[dict] = []
 
         async def capture_response(response):
-            if "json" in response.headers.get("content-type", ""):
+            url = response.url
+            status = response.status
+            ct = response.headers.get("content-type", "")
+            print(f"  [NET] {status} {ct[:40]:40} {url}")
+            if "json" in ct:
                 try:
                     data = await response.json()
-                    json_responses.append({"url": response.url, "data": data})
-                    print(f"  [API] {response.url}")
+                    all_responses.append({"url": url, "data": data})
+                    if isinstance(data, dict):
+                        print(f"         keys: {list(data.keys())[:8]}")
+                    elif isinstance(data, list) and data and isinstance(data[0], dict):
+                        print(f"         array[{len(data)}] first-item keys: {list(data[0].keys())[:8]}")
                 except Exception:
                     pass
 
@@ -131,17 +137,14 @@ async def scrape_us_listings():
                 f"No select element found with option value='{US_COUNTRY_VALUE}'"
             )
 
-        json_responses.clear()  # only want responses triggered by country selection
         await country_select.select_option(value=US_COUNTRY_VALUE)
         await page.wait_for_load_state("networkidle", timeout=15000)
 
-        print(f"  Captured {len(json_responses)} JSON response(s) after country selection")
+        print(f"  Total responses captured so far: {len(all_responses)}")
 
         # --- Step 3: Parse centers from API response ---
-        # Angular calls an endpoint that returns a list of center objects shaped like:
-        # [{"Center": {"city": "...", "name": "..."}}, ...]
-        # Walk every captured response and pick the first one that looks like centers.
-        for resp in json_responses:
+        # Walk every captured JSON response and pick the one that looks like centers.
+        for resp in all_responses:
             data = resp["data"]
             if not isinstance(data, list) or not data:
                 continue
