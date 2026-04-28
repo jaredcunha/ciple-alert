@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """Check CAPLE registration site for CIPLE exam listings in the United States."""
 
-import asyncio
 import json
 import os
 import smtplib
 import sys
+import urllib.request
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
-
 STATE_FILE = Path("state.json")
-US_COUNTRY_VALUE = "3"
+DATA_URL = "https://caple.letras.ulisboa.pt/inscricao.json"
 REGISTRATION_URL = "https://caple.letras.ulisboa.pt/inscricao"
+
+# Dropdown option value for the United States in the country select.
+US_COUNTRY_VALUE = "69"
+
+# CIPLE exam id in the exams array.
+CIPLE_EXAM_ID = "2"
 
 
 def load_state():
@@ -27,176 +31,69 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
 
 
-async def dismiss_overlays(page):
-    """Dismiss cookie consent banner and any modal dialogs."""
-    # Cookie consent — try common button selectors
-    try:
-        consent = page.locator(
-            ".cc-btn.cc-allow, .cc-btn.cc-dismiss, .cc-accept, "
-            ".cc-window button, [aria-label='cookieconsent'] button"
-        )
-        if await consent.count() > 0:
-            await consent.first.click(timeout=3000)
-            await page.wait_for_timeout(500)
-            print("  Dismissed cookie consent banner")
-    except Exception:
-        pass
-
-    # Modal dialogs — press Escape first, then try clicking the background
-    try:
-        if await page.locator(".modal.is-active").count() > 0:
-            await page.keyboard.press("Escape")
-            await page.wait_for_timeout(500)
-            print("  Dismissed modal via Escape")
-    except Exception:
-        pass
-
-    try:
-        bg = page.locator(".modal-background")
-        if await bg.count() > 0:
-            await bg.first.click(timeout=2000)
-            await page.wait_for_timeout(300)
-    except Exception:
-        pass
+def fetch_inscricao_json() -> dict:
+    req = urllib.request.Request(
+        DATA_URL,
+        headers={"Accept": "application/json", "Referer": REGISTRATION_URL},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
 
-async def scrape_us_listings():
-    """Navigate the CAPLE registration form and return US CIPLE exam centers/dates."""
+def scrape_us_listings() -> list[dict]:
+    data = fetch_inscricao_json()
+
+    countries = data.get("countries", [])
+    print(f"inscricao.json: {len(countries)} countries, keys={list(data.keys())}")
+
+    # ---- Find the target country ----
+    # The dropdown <option> values may be array indices OR Country.id values.
+    # Try both so we can see what matches.
+    by_index = countries[int(US_COUNTRY_VALUE)] if US_COUNTRY_VALUE.isdigit() and int(US_COUNTRY_VALUE) < len(countries) else None
+    by_id = next((c for c in countries if str(c.get("Country", c).get("id", "")) == US_COUNTRY_VALUE), None)
+
+    print(f"By index [{US_COUNTRY_VALUE}]: {json.dumps(by_index, ensure_ascii=False)[:120] if by_index else 'out of range'}")
+    print(f"By id=={US_COUNTRY_VALUE}:    {json.dumps(by_id, ensure_ascii=False)[:120] if by_id else 'not found'}")
+
+    target = by_id or by_index
+    if target is None:
+        print("Target country not found. First 5 countries:")
+        for i, c in enumerate(countries[:5]):
+            co = c.get("Country", c)
+            print(f"  [{i}] id={co.get('id','?')} name={co.get('name','?')}")
+        return []
+
+    print(f"\nTarget country full structure:\n{json.dumps(target, indent=2, ensure_ascii=False)[:1500]}\n")
+
+    # ---- Extract centers / lapes ----
+    centers_raw = (
+        target.get("Centers")
+        or target.get("Lapes")
+        or target.get("lapes")
+        or target.get("centers")
+        or []
+    )
+    print(f"Centers/lapes found for country: {len(centers_raw)}")
+
     centers = []
+    for item in centers_raw:
+        center_obj = item.get("Center") or item.get("Lape") or item
+        if not isinstance(center_obj, dict):
+            continue
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        # Only include centers that offer CIPLE (exam id=2).
+        # If no exam list exists on the item, include it anyway.
+        exam_ids = {
+            str(e.get("exam_id") or e.get("Exam", {}).get("id", ""))
+            for e in item.get("Exams", item.get("ExamLapes", item.get("ExamCenter", [])))
+        }
+        if exam_ids and CIPLE_EXAM_ID not in exam_ids:
+            continue
 
-        # Capture all network responses so we can find the centers endpoint.
-        all_responses: list[dict] = []
-
-        async def capture_response(response):
-            url = response.url
-            status = response.status
-            ct = response.headers.get("content-type", "")
-            print(f"  [NET] {status} {ct[:40]:40} {url}")
-            if "json" in ct:
-                try:
-                    data = await response.json()
-                    all_responses.append({"url": url, "data": data})
-                    if isinstance(data, dict):
-                        print(f"         keys: {list(data.keys())[:8]}")
-                    elif isinstance(data, list) and data and isinstance(data[0], dict):
-                        print(f"         array[{len(data)}] first-item keys: {list(data[0].keys())[:8]}")
-                except Exception:
-                    pass
-
-        page.on("response", capture_response)
-
-        print(f"Loading {REGISTRATION_URL}...")
-        await page.goto(REGISTRATION_URL, wait_until="networkidle", timeout=30000)
-        await dismiss_overlays(page)
-
-        # --- Step 1: Select CIPLE exam ---
-        print("Selecting CIPLE exam type...")
-        selects = page.locator("select")
-        print(f"  Found {await selects.count()} select element(s) on page")
-
-        exam_select = selects.first
-        all_options = await exam_select.locator("option").all()
-
-        # Angular binds complex objects so option values show as "[object Object]".
-        # Select by visible label text instead.
-        ciple_label = None
-        for opt in all_options:
-            text = (await opt.inner_text()).strip()
-            val = await opt.get_attribute("value")
-            print(f"    '{text}' (value='{val}')")
-            if text.upper() == "CIPLE" and ciple_label is None:
-                ciple_label = text
-
-        if ciple_label is None:
-            raise ValueError("CIPLE option not found in exam dropdown")
-
-        print(f"  Selecting '{ciple_label}' by label...")
-        await exam_select.select_option(label=ciple_label)
-        await page.wait_for_load_state("networkidle", timeout=15000)
-
-        # --- Step 2: Select country ---
-        print(f"Selecting country (value={US_COUNTRY_VALUE})...")
-
-        country_select = None
-        for i in range(await selects.count()):
-            sel = selects.nth(i)
-            opt_values = await sel.locator("option").evaluate_all(
-                "opts => opts.map(o => o.value)"
-            )
-            if US_COUNTRY_VALUE in opt_values:
-                country_select = sel
-                print(f"  Country dropdown found at select index {i}")
-                break
-
-        if country_select is None:
-            raise ValueError(
-                f"No select element found with option value='{US_COUNTRY_VALUE}'"
-            )
-
-        await country_select.select_option(value=US_COUNTRY_VALUE)
-        await page.wait_for_load_state("networkidle", timeout=15000)
-
-        print(f"  Total responses captured so far: {len(all_responses)}")
-
-        # --- Step 3: Parse centers from API response ---
-        # Walk every captured JSON response and pick the one that looks like centers.
-        for resp in all_responses:
-            data = resp["data"]
-            if not isinstance(data, list) or not data:
-                continue
-            first = data[0]
-            if not isinstance(first, dict):
-                continue
-
-            # Detect center-shaped payloads
-            center_obj = first.get("Center", first)
-            if not isinstance(center_obj, dict):
-                continue
-            if not any(k in center_obj for k in ("city", "name", "City", "Name")):
-                continue
-
-            print(f"  Using center data from: {resp['url']}")
-            for item in data:
-                c = item.get("Center", item)
-                city = c.get("city") or c.get("City") or ""
-                name = c.get("name") or c.get("Name") or ""
-                if city or name:
-                    centers.append({"city": str(city).strip(), "name": str(name).strip()})
-            break
-
-        # --- Fallback: try CSS selector on the DOM ---
-        if not centers:
-            print("  No centers in API responses — trying DOM selector...")
-            try:
-                await page.wait_for_selector(
-                    "label.radio.country-item", state="visible", timeout=8000
-                )
-            except PlaywrightTimeoutError:
-                pass
-
-            for label in await page.locator("label.radio.country-item").all():
-                columns = await label.locator(".column:not(.is-1)").all()
-                parts = [
-                    t for col in columns
-                    if (t := (await col.inner_text()).strip())
-                ]
-                if not parts:
-                    parts = [(await label.inner_text()).strip()]
-                centers.append({
-                    "city": parts[0] if parts else "",
-                    "name": parts[1] if len(parts) > 1 else "",
-                })
-
-        if not centers:
-            page_text = await page.inner_text("body")
-            print("  No centers found anywhere. Page excerpt (first 800 chars):")
-            print(page_text[:800])
-
-        await browser.close()
+        city = str(center_obj.get("city") or center_obj.get("City") or "").strip()
+        name = str(center_obj.get("name") or center_obj.get("Name") or "").strip()
+        if city or name:
+            centers.append({"city": city, "name": name})
 
     return centers
 
@@ -227,16 +124,11 @@ def format_centers(centers):
     for c in centers:
         city = c.get("city", "").strip()
         name = c.get("name", "").strip()
-        if city and name:
-            lines.append(f"  - {city} — {name}")
-        else:
-            lines.append(f"  - {city or name or 'Unknown'}")
-        for session in c.get("sessions", []):
-            lines.append(f"      {session}")
+        lines.append(f"  - {city} — {name}" if city and name else f"  - {city or name or 'Unknown'}")
     return "\n".join(lines)
 
 
-async def main():
+def main():
     force_notify = os.environ.get("FORCE_NOTIFY", "").lower() in ("true", "1", "yes")
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -248,7 +140,7 @@ async def main():
     prev_centers = state.get("centers", [])
 
     try:
-        centers = await scrape_us_listings()
+        centers = scrape_us_listings()
     except Exception as e:
         print(f"ERROR: Scrape failed: {e}")
         sys.exit(1)
@@ -259,10 +151,8 @@ async def main():
     prev_json = json.dumps(prev_centers, sort_keys=True)
     curr_json = json.dumps(centers, sort_keys=True)
     listings_changed = prev_json != curr_json
-
     print(f"Listings changed: {listings_changed}")
 
-    # Persist updated state
     state["centers"] = centers
     state["last_checked"] = now
     save_state(state)
@@ -276,22 +166,19 @@ async def main():
 
     if force_notify and not listings_changed:
         subject = "[TEST] CIPLE Alert — Checker is Running"
-        if centers:
-            body = (
-                f"Test notification from the CIPLE exam date checker.\n\n"
-                f"Status: {len(centers)} US exam center(s) currently listed:\n\n"
-                f"{format_centers(centers)}\n\n"
-                f"Registration: {REGISTRATION_URL}\n\n"
-                f"Checked: {now}"
-            )
-        else:
-            body = (
-                f"Test notification from the CIPLE exam date checker.\n\n"
-                f"Status: No US exam listings found yet.\n\n"
-                f"The checker is running correctly. You will be notified\n"
-                f"as soon as exam centers are listed for the United States.\n\n"
-                f"Checked: {now}"
-            )
+        body = (
+            f"Test notification from the CIPLE exam date checker.\n\n"
+            f"Status: {len(centers)} US exam center(s) currently listed:\n\n"
+            f"{format_centers(centers)}\n\n"
+            f"Registration: {REGISTRATION_URL}\n\n"
+            f"Checked: {now}"
+        ) if centers else (
+            f"Test notification from the CIPLE exam date checker.\n\n"
+            f"Status: No US exam listings found yet.\n\n"
+            f"The checker is running correctly. You will be notified\n"
+            f"as soon as exam centers are listed for the United States.\n\n"
+            f"Checked: {now}"
+        )
     else:
         subject = "CIPLE Exam Listings Now Available in the United States"
         body = (
@@ -306,4 +193,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
