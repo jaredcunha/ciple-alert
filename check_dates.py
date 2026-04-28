@@ -137,67 +137,50 @@ async def scrape_us_listings():
             # force=True bypasses the overlay intercept check — the button is ready,
             # a persistent Angular modal-background is just sitting in front of it.
             await submit.first.click(force=True, timeout=10000)
-            await page.wait_for_load_state("networkidle", timeout=20000)
+            # Wait for the centers section to become visible rather than networkidle.
+            # The form is a SPA — step 1 stays in the DOM hidden after advancing,
+            # so networkidle alone doesn't tell us step 2 content is ready.
+            try:
+                await page.wait_for_selector(
+                    "label.radio.country-item",
+                    state="visible",
+                    timeout=15000,
+                )
+                print("  Center listing section is visible")
+            except PlaywrightTimeoutError:
+                print("  No center listing section appeared — likely no centers for this selection")
         else:
             print("  No submit button found — checking current page for centers")
 
         # --- Step 4: Extract center listings ---
+        # Centers render as <label class="radio country-item"> elements.
+        # Each label contains .column divs — the first (is-1) holds the radio button,
+        # the rest hold city and center name text.
         print("Extracting exam centers...")
-        page_text = await page.inner_text("body")
+        center_labels = await page.locator("label.radio.country-item").all()
+        print(f"  Found {len(center_labels)} center label(s)")
 
-        # Check for explicit "no results" messages
-        no_listing_phrases = [
-            "não há", "não existem", "no centers", "nenhum centro",
-            "sem resultados", "no results", "no exams available",
-        ]
-        if any(phrase in page_text.lower() for phrase in no_listing_phrases):
-            print("  Page reports no centers available for this selection")
-            await browser.close()
-            return []
+        for label in center_labels:
+            # Collect text from all columns except the radio-button column (is-1)
+            columns = await label.locator(".column:not(.is-1)").all()
+            parts = []
+            for col in columns:
+                t = (await col.inner_text()).strip()
+                if t:
+                    parts.append(t)
 
-        # The center listing page (step 2) renders centers via Angular ng-repeat.
-        # Each center row contains center.Center.city and center.Center.name.
-        # Try ng-repeat rows first, then fall back to select options.
-        ng_rows = await page.locator(
-            "[ng-repeat*='center' i], [ng-repeat*='lape' i], [ng-repeat*='Center' i]"
-        ).all()
+            if not parts:
+                # Fallback: grab all inner text from the label
+                parts = [(await label.inner_text()).strip()]
 
-        if ng_rows:
-            print(f"  Found {len(ng_rows)} ng-repeat row(s)")
-            for row in ng_rows:
-                text = (await row.inner_text()).strip()
-                if not text:
-                    continue
-                # Try to split city / name if both appear on separate lines or elements
-                city_el = await row.locator("[class*='city' i], [ng-bind*='city' i]").all()
-                name_el = await row.locator("[class*='name' i], [ng-bind*='name' i]").all()
-                city = (await city_el[0].inner_text()).strip() if city_el else ""
-                name = (await name_el[0].inner_text()).strip() if name_el else ""
-                centers.append({
-                    "city": city or text,
-                    "name": name,
-                })
-        else:
-            # Fall back: look for options in a select dropdown (centers as a <select>)
-            current_selects = page.locator("select")
-            for i in range(await current_selects.count()):
-                sel = current_selects.nth(i)
-                opts = await sel.locator("option").all()
-                candidates = []
-                for opt in opts:
-                    val = await opt.get_attribute("value")
-                    text = (await opt.inner_text()).strip()
-                    if val and val not in ("", "0") and text:
-                        # Options often read "City — Center Name" or "City (Center Name)"
-                        candidates.append({"city": text, "name": "", "value": val})
-                if candidates:
-                    print(f"  Found {len(candidates)} option(s) in select index {i}")
-                    centers = candidates
-                    break
+            # First part is typically the city, second the center name
+            city = parts[0] if len(parts) > 0 else ""
+            name = parts[1] if len(parts) > 1 else ""
+            centers.append({"city": city, "name": name})
 
-        # If we still have nothing, dump a page excerpt for debugging
         if not centers:
-            print("  No structured center data found. Page excerpt (first 800 chars):")
+            page_text = await page.inner_text("body")
+            print("  No centers found. Page excerpt (first 800 chars):")
             print(page_text[:800])
 
         await browser.close()
