@@ -15,7 +15,7 @@ DATA_URL = "https://caple.letras.ulisboa.pt/inscricao.json"
 REGISTRATION_URL = "https://caple.letras.ulisboa.pt/inscricao"
 
 # Dropdown option value for the United States in the country select.
-US_COUNTRY_VALUE = "69"
+US_COUNTRY_VALUE = "3"
 
 # CIPLE exam id in the exams array.
 CIPLE_EXAM_ID = "2"
