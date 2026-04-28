@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check CAPLE registration site for CIPLE exam listings in the United States."""
+"""Alert when CIPLE exam centers are listed for the United States on CAPLE."""
 
 import json
 import os
@@ -11,13 +11,13 @@ from email.mime.text import MIMEText
 from pathlib import Path
 
 STATE_FILE = Path("state.json")
-DATA_URL = "https://caple.letras.ulisboa.pt/inscricao.json"
 REGISTRATION_URL = "https://caple.letras.ulisboa.pt/inscricao"
+CENTERS_URL = (
+    "https://caple.letras.ulisboa.pt/centers/getCentersExamsByCountry.json"
+    "?country_id={country_id}&exam_id={exam_id}"
+)
 
-# Dropdown option value for the United States in the country select.
-US_COUNTRY_VALUE = "3"
-
-# CIPLE exam id in the exams array.
+US_COUNTRY_ID = "3"
 CIPLE_EXAM_ID = "2"
 
 
@@ -31,12 +31,12 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
 
 
-def fetch_inscricao_json() -> dict:
+def fetch_centers(country_id: str, exam_id: str) -> list[dict]:
+    url = CENTERS_URL.format(country_id=country_id, exam_id=exam_id)
     req = urllib.request.Request(
-        DATA_URL,
+        url,
         headers={
             "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
             "Referer": REGISTRATION_URL,
             "User-Agent": (
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -46,24 +46,16 @@ def fetch_inscricao_json() -> dict:
         },
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read()
-        print(f"inscricao.json response size: {len(raw):,} bytes")
-        return json.loads(raw.decode("utf-8"))
+        data = json.loads(resp.read().decode("utf-8"))
 
-
-def scrape_us_listings() -> list[dict]:
-    data = fetch_inscricao_json()
-    print(f"inscricao.json keys={list(data.keys())}")
-
-    # Print the full first exam item to see if Lapes/centers are nested inside exams.
-    exams = data.get("exams", [])
-    if isinstance(exams, dict):
-        exams = list(exams.values())
-    if exams:
-        print(f"\nFirst exam item keys: {list(exams[0].keys())}")
-        print(f"Full first exam item:\n{json.dumps(exams[0], indent=2, ensure_ascii=False)[:3000]}\n")
-
-    return []
+    centers = []
+    for item in data.get("centers", []):
+        c = item.get("Center", {})
+        city = str(c.get("city") or "").strip()
+        name = str(c.get("name") or "").strip()
+        if city or name:
+            centers.append({"city": city, "name": name})
+    return centers
 
 
 def send_email(subject, body):
@@ -108,28 +100,27 @@ def main():
     prev_centers = state.get("centers", [])
 
     try:
-        centers = scrape_us_listings()
+        centers = fetch_centers(US_COUNTRY_ID, CIPLE_EXAM_ID)
     except Exception as e:
-        print(f"ERROR: Scrape failed: {e}")
+        print(f"ERROR: Fetch failed: {e}")
         sys.exit(1)
 
-    print(f"\nPrevious center count: {len(prev_centers)}")
-    print(f"Current center count:  {len(centers)}")
+    print(f"Centers found: {len(centers)}")
+    for c in centers:
+        print(f"  {c['city']} — {c['name']}")
 
     prev_json = json.dumps(prev_centers, sort_keys=True)
     curr_json = json.dumps(centers, sort_keys=True)
     listings_changed = prev_json != curr_json
-    print(f"Listings changed: {listings_changed}")
 
     state["centers"] = centers
     state["last_checked"] = now
     save_state(state)
-    print(f"State saved to {STATE_FILE}")
 
     should_notify = (listings_changed and centers) or force_notify
 
     if not should_notify:
-        print("No notification sent.")
+        print("No changes — no notification sent.")
         return
 
     if force_notify and not listings_changed:
