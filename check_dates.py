@@ -134,7 +134,9 @@ async def scrape_us_listings():
 
         if await submit.count() > 0:
             print("  Clicking submit...")
-            await submit.first.click(timeout=10000)
+            # force=True bypasses the overlay intercept check — the button is ready,
+            # a persistent Angular modal-background is just sitting in front of it.
+            await submit.first.click(force=True, timeout=10000)
             await page.wait_for_load_state("networkidle", timeout=20000)
         else:
             print("  No submit button found — checking current page for centers")
