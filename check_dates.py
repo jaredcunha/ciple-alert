@@ -15,7 +15,7 @@ DATA_URL = "https://caple.letras.ulisboa.pt/inscricao.json"
 REGISTRATION_URL = "https://caple.letras.ulisboa.pt/inscricao"
 
 # Dropdown option value for the United States in the country select.
-US_COUNTRY_VALUE = "3"
+US_COUNTRY_VALUE = "69"
 
 # CIPLE exam id in the exams array.
 CIPLE_EXAM_ID = "2"
@@ -44,6 +44,9 @@ def scrape_us_listings() -> list[dict]:
     data = fetch_inscricao_json()
 
     countries = data.get("countries", [])
+    # CakePHP serializes arrays as {"0": ..., "1": ...} objects — normalize to a list.
+    if isinstance(countries, dict):
+        countries = list(countries.values())
     print(f"inscricao.json: {len(countries)} countries, keys={list(data.keys())}")
 
     # ---- Find the target country ----
