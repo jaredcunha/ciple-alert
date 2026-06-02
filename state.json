@@ -1,4 +1,9 @@
 {
-  "centers": [],
-  "last_checked": "2026-06-01 12:05 UTC"
+  "centers": [
+    {
+      "city": "Washington DC",
+      "name": "EUA - Washington DC - Embaixada de Portugal"
+    }
+  ],
+  "last_checked": "2026-06-02 11:37 UTC"
 }
