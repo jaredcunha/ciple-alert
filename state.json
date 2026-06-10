@@ -1,9 +1,12 @@
 {
-  "centers": [
-    {
-      "city": "Washington DC",
-      "name": "EUA - Washington DC - Embaixada de Portugal"
-    }
-  ],
-  "last_checked": "2026-06-10 11:22 UTC"
+  "countries": {
+    "69": [
+      {
+        "city": "Washington DC",
+        "name": "EUA - Washington DC - Embaixada de Portugal"
+      }
+    ],
+    "193": []
+  },
+  "last_checked": "2026-06-10 23:10 UTC"
 }
