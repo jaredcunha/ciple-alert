@@ -19,15 +19,23 @@ CENTERS_URL = (
     "?country_id={country_id}&exam_id={exam_id}"
 )
 
-US_COUNTRY_ID = "69"
 CIPLE_EXAM_ID = "2"
+
+COUNTRIES = {
+    "69": "United States",
+    "193": "Portugal",
+}
 
 
 def load_state():
     # Returns the saved state, or a blank default if no state file exists yet
     if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text())
-    return {"centers": [], "last_checked": None}
+        data = json.loads(STATE_FILE.read_text())
+        # Migrate legacy flat format to per-country format
+        if "centers" in data and not isinstance(data["centers"], dict):
+            return {"countries": {}, "last_checked": None}
+        return data
+    return {"countries": {}, "last_checked": None}
 
 
 def save_state(state):
@@ -95,24 +103,16 @@ def format_centers(centers):
     return "\n".join(lines)
 
 
-def main():
-    force_notify = os.environ.get("FORCE_NOTIFY", "").lower() in ("true", "1", "yes")
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-    print(f"=== CIPLE US Date Checker — {now} ===")
-    if force_notify:
-        print("Force notify mode: ON")
-
-    state = load_state()
-    prev_centers = state.get("centers", [])
+def check_country(country_id, country_name, state, force_notify, now):
+    prev_centers = state.get("countries", {}).get(country_id, [])
 
     try:
-        centers = fetch_centers(US_COUNTRY_ID, CIPLE_EXAM_ID)
+        centers = fetch_centers(country_id, CIPLE_EXAM_ID)
     except Exception as e:
-        print(f"ERROR: Fetch failed: {e}")
-        sys.exit(1)
+        print(f"ERROR: Fetch failed for {country_name}: {e}")
+        return False
 
-    print(f"Centers found: {len(centers)}")
+    print(f"{country_name} — Centers found: {len(centers)}")
     for c in centers:
         print(f"  {c['city']} — {c['name']}")
 
@@ -121,39 +121,37 @@ def main():
     curr_json = json.dumps(centers, sort_keys=True)
     listings_changed = prev_json != curr_json
 
-    # Always persist the latest data and timestamp, even if nothing changed
-    state["centers"] = centers
-    state["last_checked"] = now
-    save_state(state)
+    state.setdefault("countries", {})[country_id] = centers
 
-    # Only notify if new centers appeared, or if the user explicitly forced a test alert
     should_notify = (listings_changed and centers) or force_notify
 
     if not should_notify:
-        print("No changes — no notification sent.")
-        return
+        print(f"{country_name} — No changes, no notification sent.")
+        return True
 
     if force_notify and not listings_changed:
         # Test email: confirms the workflow is running but no real change occurred
-        subject = "[TEST] CIPLE Alert — Checker is Running"
+        subject = f"[TEST] CIPLE Alert — Checker is Running ({country_name})"
         body = (
             f"Test notification from the CIPLE exam date checker.\n\n"
-            f"Status: {len(centers)} US exam center(s) currently listed:\n\n"
+            f"Country: {country_name}\n\n"
+            f"Status: {len(centers)} exam center(s) currently listed:\n\n"
             f"{format_centers(centers)}\n\n"
             f"Registration: {REGISTRATION_URL}\n\n"
             f"Checked: {now}"
         ) if centers else (
             f"Test notification from the CIPLE exam date checker.\n\n"
-            f"Status: No US exam listings found yet.\n\n"
+            f"Country: {country_name}\n\n"
+            f"Status: No exam listings found yet.\n\n"
             f"The checker is running correctly. You will be notified\n"
-            f"as soon as exam centers are listed for the United States.\n\n"
+            f"as soon as exam centers are listed for {country_name}.\n\n"
             f"Checked: {now}"
         )
     else:
         # Real alert: centers have appeared for the first time (or changed)
-        subject = "CIPLE Exam Listings Now Available in the United States"
+        subject = f"CIPLE Exam Listings Now Available in {country_name}"
         body = (
-            f"CIPLE exam center listings have appeared for the United States.\n\n"
+            f"CIPLE exam center listings have appeared for {country_name}.\n\n"
             f"Centers found ({len(centers)}):\n\n"
             f"{format_centers(centers)}\n\n"
             f"Register here: {REGISTRATION_URL}\n\n"
@@ -161,6 +159,30 @@ def main():
         )
 
     send_email(subject, body)
+    return True
+
+
+def main():
+    force_notify = os.environ.get("FORCE_NOTIFY", "").lower() in ("true", "1", "yes")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    print(f"=== CIPLE Date Checker — {now} ===")
+    if force_notify:
+        print("Force notify mode: ON")
+
+    state = load_state()
+    any_error = False
+
+    for country_id, country_name in COUNTRIES.items():
+        success = check_country(country_id, country_name, state, force_notify, now)
+        if not success:
+            any_error = True
+
+    state["last_checked"] = now
+    save_state(state)
+
+    if any_error:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
