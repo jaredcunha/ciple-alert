@@ -2,7 +2,7 @@ name: Check CIPLE US Exam Listings
 
 on:
   schedule:
-    - cron: "0 10 * * *"  # 10:00 UTC daily (6am ET / 3am PT)
+    - cron: "0 * * * *" # every hour
   workflow_dispatch:
     inputs:
       force_notify:
