@@ -18,6 +18,10 @@ CENTERS_URL = (
     "https://caple.letras.ulisboa.pt/centers/getCentersExamsByCountry.json"
     "?country_id={country_id}&exam_id={exam_id}"
 )
+SEASONS_URL = (
+    "https://caple.letras.ulisboa.pt/seasons/getSeasonsByCenterExam.json"
+    "?exam_id={exam_id}&center_id={center_id}"
+)
 
 CIPLE_EXAM_ID = "2"
 
@@ -64,11 +68,41 @@ def fetch_centers(country_id: str, exam_id: str) -> list[dict]:
     centers = []
     for item in data.get("centers", []):
         c = item.get("Center", {})
+        center_id = str(c.get("id") or "").strip()
         city = str(c.get("city") or "").strip()
         name = str(c.get("name") or "").strip()
         if city or name:
-            centers.append({"city": city, "name": name})
+            centers.append({"id": center_id, "city": city, "name": name})
     return centers
+
+
+def fetch_seasons(center_id: str, exam_id: str) -> list[dict]:
+    url = SEASONS_URL.format(exam_id=exam_id, center_id=center_id)
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json, text/plain, */*",
+            "Referer": REGISTRATION_URL,
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+
+    seasons = []
+    for item in data.get("seasons", []):
+        s = item.get("Season", item)
+        entry = {}
+        for field in ("id", "name", "date_ciple"):
+            if s.get(field):
+                entry[field] = str(s[field]).strip()
+        if entry:
+            seasons.append(entry)
+    return seasons
 
 
 def send_email(subject, body):
@@ -116,10 +150,21 @@ def check_country(country_id, country_name, state, force_notify, now):
     for c in centers:
         print(f"  {c['city']} — {c['name']}")
 
-    # Compare as sorted JSON strings so order differences don't trigger false positives
-    prev_json = json.dumps(prev_centers, sort_keys=True)
+    # Strip seasons before comparing so date changes don't trigger notifications
+    prev_stripped = [{k: v for k, v in c.items() if k != "seasons"} for c in prev_centers]
+    prev_json = json.dumps(prev_stripped, sort_keys=True)
     curr_json = json.dumps(centers, sort_keys=True)
     listings_changed = prev_json != curr_json
+
+    # Enrich each center with its exam season dates
+    for c in centers:
+        if c.get("id"):
+            try:
+                c["seasons"] = fetch_seasons(c["id"], CIPLE_EXAM_ID)
+                print(f"  Seasons for {c['city']}: {len(c['seasons'])} found")
+            except Exception as e:
+                print(f"  WARNING: Could not fetch seasons for {c.get('city', c['id'])}: {e}")
+                c["seasons"] = []
 
     state.setdefault("countries", {})[country_id] = centers
 
