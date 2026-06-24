@@ -2,11 +2,19 @@
   "countries": {
     "69": [
       {
+        "id": "3048",
         "city": "Washington DC",
-        "name": "EUA - Washington DC - Embaixada de Portugal"
+        "name": "EUA - Washington DC - Embaixada de Portugal",
+        "seasons": [
+          {
+            "id": "137",
+            "name": "Em Portugal e no estrangeiro_2026_julho",
+            "date_ciple": "2026-07-16"
+          }
+        ]
       }
     ],
     "193": []
   },
-  "last_checked": "2026-06-24 13:44 UTC"
+  "last_checked": "2026-06-24 14:59 UTC"
 }
