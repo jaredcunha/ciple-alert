@@ -254,7 +254,7 @@
       const footerEl = document.getElementById("footer");
 
       try {
-        const res = await fetch("state.json?_=" + Date.now());
+        const res = await fetch("https://raw.githubusercontent.com/jaredcunha/ciple-alert/main/state.json?_=" + Date.now());
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
