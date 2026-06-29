@@ -25,6 +25,21 @@ Add the following secrets to your GitHub repository (Settings → Secrets and va
 | `GMAIL_USER` | Gmail address used to send alerts |
 | `GMAIL_APP_PASSWORD` | [Gmail App Password](https://support.google.com/accounts/answer/185833) (not your regular password) |
 | `NOTIFY_EMAIL` | Address to receive alerts (can be the same as `GMAIL_USER`) |
+| `NOTIFY_SMS` | *(optional)* Your phone number's carrier email-to-SMS gateway address, e.g. `5551234567@vtext.com` |
+
+#### SMS alerts (no paid SMS service required)
+
+Setting `NOTIFY_SMS` sends a second, shortened copy of every alert through your carrier's email-to-SMS gateway instead of a paid API like Twilio. The carrier delivers it as a normal text message, billed at your plan's standard message rate. Build the address from your 10-digit number plus your carrier's domain:
+
+| Carrier | Gateway domain |
+|---|---|
+| Verizon | `@vtext.com` |
+| AT&T | `@txt.att.net` |
+| T-Mobile | `@tmomail.net` |
+| Sprint | `@messaging.sprintpcs.com` |
+| Google Fi | `@msg.fi.google.com` |
+
+Example: a Verizon number `555-123-4567` becomes `5551234567@vtext.com`.
 
 ### Running manually
 
@@ -36,6 +51,7 @@ You can also run the script locally:
 GMAIL_USER=you@gmail.com \
 GMAIL_APP_PASSWORD=your_app_password \
 NOTIFY_EMAIL=you@gmail.com \
+NOTIFY_SMS=5551234567@vtext.com \
 FORCE_NOTIFY=true \
 python check_dates.py
 ```

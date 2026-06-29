@@ -28,6 +28,7 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          NOTIFY_SMS: ${{ secrets.NOTIFY_SMS }}
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
         run: python check_dates.py
 

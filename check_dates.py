@@ -111,18 +111,34 @@ def send_email(subject, body):
     # Falls back to sending to the sender's own address if NOTIFY_EMAIL isn't set
     notify_email = os.environ.get("NOTIFY_EMAIL", gmail_user)
 
-    msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = subject
-    msg["From"] = gmail_user
-    msg["To"] = notify_email
-
     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
         smtp.ehlo()
         smtp.starttls()
         smtp.login(gmail_user, gmail_password)
-        smtp.send_message(msg)
-
+        _send_message(smtp, gmail_user, notify_email, subject, body)
     print(f"Email sent to {notify_email}")
+
+    # Optionally also text a carrier email-to-SMS gateway (e.g. 5551234567@vtext.com),
+    # which delivers as a normal SMS billed at the recipient's standard message rate
+    # instead of going through a paid SMS API.
+    notify_sms = os.environ.get("NOTIFY_SMS")
+    if notify_sms:
+        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(gmail_user, gmail_password)
+            # Carrier gateways truncate long messages and ignore the subject, so keep it short
+            sms_body = f"{subject}\n{REGISTRATION_URL}"[:280]
+            _send_message(smtp, gmail_user, notify_sms, "", sms_body)
+        print(f"SMS sent to {notify_sms}")
+
+
+def _send_message(smtp, from_addr, to_addr, subject, body):
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    smtp.send_message(msg)
 
 
 def format_centers(centers):
