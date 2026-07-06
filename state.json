@@ -1,7 +1,44 @@
 {
   "countries": {
     "69": [],
-    "193": []
+    "193": [
+      {
+        "id": "4006",
+        "city": "Faro",
+        "name": "PORTUGAL - Faro - Universidade do Algarve",
+        "seasons": [
+          {
+            "id": "143",
+            "name": "CIPLE setembro 2026 (apenas Portugal)",
+            "date_ciple": "2026-09-19"
+          }
+        ]
+      },
+      {
+        "id": "4022",
+        "city": "Leiria",
+        "name": "PORTUGAL - Leiria - Instituto Politécnico de Leiria",
+        "seasons": [
+          {
+            "id": "143",
+            "name": "CIPLE setembro 2026 (apenas Portugal)",
+            "date_ciple": "2026-09-19"
+          }
+        ]
+      },
+      {
+        "id": "4001",
+        "city": "Lisboa",
+        "name": "PORTUGAL - Lisboa - Universidade de Lisboa",
+        "seasons": [
+          {
+            "id": "143",
+            "name": "CIPLE setembro 2026 (apenas Portugal)",
+            "date_ciple": "2026-09-19"
+          }
+        ]
+      }
+    ]
   },
-  "last_checked": "2026-07-06 10:16 UTC"
+  "last_checked": "2026-07-06 14:22 UTC"
 }
