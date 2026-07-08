@@ -1,245 +1,291 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CIPLE Exam Status</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f5f5f5;
-      color: #1a1a1a;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 3rem 1rem;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 2.5rem;
-    }
-
-    header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    header p {
-      margin-top: 0.4rem;
-      color: #666;
-      font-size: 0.95rem;
-    }
-
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.25rem;
-      width: 100%;
-      max-width: 680px;
-    }
-
-    .card {
-      background: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 10px;
-      padding: 1.5rem;
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-
-    .card-header h2 {
-      font-size: 1.05rem;
-      font-weight: 600;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-size: 0.78rem;
-      font-weight: 600;
-      padding: 0.3rem 0.65rem;
-      border-radius: 999px;
-    }
-
-    .badge::before {
-      content: "";
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-    }
-
-    .badge.open {
-      background: #dcfce7;
-      color: #15803d;
-    }
-
-    .badge.open::before { background: #16a34a; }
-
-    .badge.closed {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-
-    .badge.closed::before { background: #9ca3af; }
-
-    .centers {
-      list-style: none;
-      border-top: 1px solid #f0f0f0;
-      padding-top: 0.85rem;
-    }
-
-    .centers li {
-      padding: 0.5rem 0;
-      font-size: 0.9rem;
-      color: #333;
-      line-height: 1.4;
-    }
-
-    .centers li + li {
-      border-top: 1px solid #f5f5f5;
-    }
-
-    .center-city { font-weight: 500; }
-
-    .center-name {
-      color: #666;
-      font-size: 0.85rem;
-    }
-
-    .center-dates {
-      margin-top: 0.5rem;
-      padding-top: 0.4rem;
-    }
-
-    .center-dates .dates-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: #888;
-      margin-bottom: 0.25rem;
-    }
-
-    .center-dates .date-item {
-      font-size: 0.82rem;
-      color: #444;
-      padding: 0.15rem 0;
-    }
-
-    .center-dates .dates-loading {
-      font-size: 0.8rem;
-      color: #bbb;
-      font-style: italic;
-    }
-
-    .no-listings {
-      padding-top: 0.85rem;
-      border-top: 1px solid #f0f0f0;
-      font-size: 0.88rem;
-      color: #999;
-    }
-
-    footer {
-      margin-top: 2.5rem;
-      text-align: center;
-      font-size: 0.82rem;
-      color: #999;
-      line-height: 1.7;
-    }
-
-    footer a {
-      color: #555;
-      text-decoration: underline;
-    }
-
-    .error {
-      color: #b91c1c;
-      font-size: 0.9rem;
-      text-align: center;
-      margin-top: 1rem;
-    }
-
-    .loading {
-      color: #999;
-      font-size: 0.9rem;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>CIPLE Exam Status</h1>
-    <p>Registration availability for US &amp; Portugal</p>
-  </header>
-
-  <div class="cards" id="cards">
-    <p class="loading">Loading&hellip;</p>
-  </div>
-
-  <footer id="footer"></footer>
-
-  <script>
-    const COUNTRIES = { "69": "United States", "193": "Portugal" };
-
-    function esc(str) {
-      return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
-    function formatDate(str) {
-      if (!str) return null;
-      const d = new Date(str.includes("T") ? str : str + "T00:00:00");
-      if (isNaN(d)) return str;
-      return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    }
-
-    function renderSeasons(seasons) {
-      if (!seasons || !seasons.length) return "";
-      const items = seasons
-        .filter(s => s.date_ciple)
-        .map(s => {
-          const label = s.name ? `<strong>${esc(s.name)}</strong>` : null;
-          const date = `<span class="date-item">Exam: ${esc(formatDate(s.date_ciple))}</span>`;
-          return [label, date].filter(Boolean).join("<br>");
-        })
-        .map(content => `<div style="margin-bottom:0.35rem">${content}</div>`)
-        .join("");
-      return items ? `<div class="center-dates"><div class="dates-label">Exam dates</div>${items}</div>` : "";
-    }
-
-    function renderCard(countryName, centers) {
-      const isOpen = centers && centers.length > 0;
-      const badge = isOpen
-        ? '<span class="badge open">Open</span>'
-        : '<span class="badge closed">No listings yet</span>';
-
-      let body;
-      if (isOpen) {
-        const items = centers.map(c => {
-          const city = c.city ? `<span class="center-city">${esc(c.city)}</span>` : "";
-          const name = c.name ? `<span class="center-name">${esc(c.name)}</span>` : "";
-          return `<li>${[city, name].filter(Boolean).join("<br>")}${renderSeasons(c.seasons)}</li>`;
-        }).join("");
-        body = `<ul class="centers">${items}</ul>`;
-      } else {
-        body = `<p class="no-listings">No exam centers are currently listed.</p>`;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CIPLE Exam Status</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
 
-      return `
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f5f5f5;
+        color: #1a1a1a;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 3rem 1rem;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 2.5rem;
+      }
+
+      header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      header p {
+        margin-top: 0.4rem;
+        color: #666;
+        font-size: 0.95rem;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.25rem;
+        width: 100%;
+        max-width: 680px;
+      }
+
+      .card {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1.5rem;
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+      }
+
+      .card-header h2 {
+        font-size: 1.15rem;
+        font-weight: 600;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.3rem 0.65rem;
+        border-radius: 999px;
+      }
+
+      .badge::before {
+        content: "";
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+      }
+
+      .badge.open {
+        background: #dcfce7;
+        color: #15803d;
+      }
+
+      .badge.open::before {
+        background: #16a34a;
+      }
+
+      .badge.closed {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+
+      .badge.closed::before {
+        background: #9ca3af;
+      }
+
+      .centers {
+        list-style: none;
+        border-top: 1px solid #d4d4d4;
+        padding-top: 0.85rem;
+      }
+
+      .centers li {
+        padding: 1rem 0;
+        font-size: 0.9rem;
+        color: #333;
+        line-height: 1.4;
+      }
+
+      .centers li + li {
+        border-top: 1px solid #d4d4d4;
+      }
+
+      .center-city {
+        font-weight: 700;
+      }
+
+      .center-name {
+        color: #666;
+        font-size: 0.85rem;
+      }
+
+      .center-dates {
+        margin-top: 0.5rem;
+        padding-top: 0.4rem;
+      }
+
+      .center-dates .dates-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #888;
+        margin-bottom: 0.25rem;
+      }
+
+      .center-dates .date-item {
+        font-size: 0.82rem;
+        color: #444;
+        padding: 0.15rem 0;
+      }
+
+      .center-dates .dates-loading {
+        font-size: 0.8rem;
+        color: #bbb;
+        font-style: italic;
+      }
+
+      .no-listings {
+        padding-top: 0.85rem;
+        border-top: 1px solid #f0f0f0;
+        font-size: 0.88rem;
+        color: #999;
+      }
+
+      footer {
+        margin-top: 2.5rem;
+        text-align: center;
+        font-size: 0.82rem;
+        color: #999;
+        line-height: 1.7;
+      }
+
+      footer a {
+        color: #555;
+        text-decoration: underline;
+      }
+
+      .button {
+        display: inline-block;
+        margin: 0.6rem 0;
+        padding: 0.55rem 1.1rem;
+        background: #1a1a1a;
+        color: #fff;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: 999px;
+        transition: background 0.15s ease;
+      }
+
+      .button:hover {
+        background: #333;
+      }
+
+      .error {
+        color: #b91c1c;
+        font-size: 0.9rem;
+        text-align: center;
+        margin-top: 1rem;
+      }
+
+      .loading {
+        color: #999;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>CIPLE Exam Status</h1>
+      <p>Registration availability for US &amp; Portugal</p>
+    </header>
+
+    <div class="cards" id="cards">
+      <p class="loading">Loading&hellip;</p>
+    </div>
+
+    <footer id="footer"></footer>
+
+    <script>
+      const COUNTRIES = { 69: "United States", 193: "Portugal" };
+
+      function esc(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function formatDate(str) {
+        if (!str) return null;
+        const d = new Date(str.includes("T") ? str : str + "T00:00:00");
+        if (isNaN(d)) return str;
+        return d.toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+
+      function renderSeasons(seasons) {
+        if (!seasons || !seasons.length) return "";
+        const items = seasons
+          .filter((s) => s.date_ciple)
+          .map((s) => {
+            const label = s.name
+              ? `<strong style="font-weight: 500">${esc(s.name)}</strong>`
+              : null;
+            const date = `<span class="date-item">Exam: ${esc(formatDate(s.date_ciple))}</span>`;
+            return [label, date].filter(Boolean).join("<br>");
+          })
+          .map(
+            (content) => `<div style="margin-bottom:0.35rem">${content}</div>`,
+          )
+          .join("");
+        return items
+          ? `<div class="center-dates"><div class="dates-label">Exam dates</div>${items}</div>`
+          : "";
+      }
+
+      function renderCard(countryName, centers) {
+        const isOpen = centers && centers.length > 0;
+        const badge = isOpen
+          ? '<span class="badge open">Open</span>'
+          : '<span class="badge closed">No listings yet</span>';
+
+        let body;
+        if (isOpen) {
+          const items = centers
+            .map((c) => {
+              const city = c.city
+                ? `<h3 class="center-city">${esc(c.city)}</h3>`
+                : "";
+              const name = c.name
+                ? `<span class="center-name">${esc(c.name)}</span>`
+                : "";
+              return `<li>${[city, name].filter(Boolean).join("")}${renderSeasons(c.seasons)}</li>`;
+            })
+            .join("");
+          body = `<ul class="centers">${items}</ul>`;
+        } else {
+          body = `<p class="no-listings">No exam centers are currently listed.</p>`;
+        }
+
+        return `
         <div class="card">
           <div class="card-header">
             <h2>${esc(countryName)}</h2>
@@ -247,41 +293,48 @@
           </div>
           ${body}
         </div>`;
-    }
-
-    async function load() {
-      const cardsEl = document.getElementById("cards");
-      const footerEl = document.getElementById("footer");
-
-      try {
-        const res = await fetch("https://raw.githubusercontent.com/jaredcunha/ciple-alert/main/state.json?_=" + Date.now());
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        const countryData = data.countries || {};
-        const html = Object.entries(COUNTRIES)
-          .map(([id, name]) => renderCard(name, countryData[id] || []))
-          .join("");
-        cardsEl.innerHTML = html;
-
-        if (data.last_checked) {
-          const utcDate = new Date(data.last_checked.replace(" UTC", "Z"));
-          const local = utcDate.toLocaleString("en-US", {
-            timeZone: "America/New_York",
-            month: "short", day: "numeric", year: "numeric",
-            hour: "numeric", minute: "2-digit", timeZoneName: "short"
-          });
-          footerEl.innerHTML =
-            `Last checked: ${esc(local)} &mdash; updated hourly<br>` +
-            `<a href="https://caple.letras.ulisboa.pt/inscricao" target="_blank" rel="noopener">` +
-            `Register at CAPLE &rarr;</a>`;
-        }
-      } catch (err) {
-        cardsEl.innerHTML = `<p class="error">Could not load status: ${esc(err.message)}</p>`;
       }
-    }
 
-    load();
-  </script>
-</body>
+      async function load() {
+        const cardsEl = document.getElementById("cards");
+        const footerEl = document.getElementById("footer");
+
+        try {
+          const res = await fetch(
+            "https://raw.githubusercontent.com/jaredcunha/ciple-alert/main/state.json?_=" +
+              Date.now(),
+          );
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          const countryData = data.countries || {};
+          const html = Object.entries(COUNTRIES)
+            .map(([id, name]) => renderCard(name, countryData[id] || []))
+            .join("");
+          cardsEl.innerHTML = html;
+
+          if (data.last_checked) {
+            const utcDate = new Date(data.last_checked.replace(" UTC", "Z"));
+            const local = utcDate.toLocaleString("en-US", {
+              timeZone: "America/New_York",
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              timeZoneName: "short",
+            });
+            footerEl.innerHTML =
+              `<a class="button" href="https://caple.letras.ulisboa.pt/inscricao" target="_blank" rel="noopener">` +
+              `Register at CAPLE &rarr;</a>` +
+              `<p>Last checked: ${esc(local)} &mdash; updated hourly</p>`;
+          }
+        } catch (err) {
+          cardsEl.innerHTML = `<p class="error">Could not load status: ${esc(err.message)}</p>`;
+        }
+      }
+
+      load();
+    </script>
+  </body>
 </html>
