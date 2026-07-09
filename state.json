@@ -15,18 +15,6 @@
         ]
       },
       {
-        "id": "4022",
-        "city": "Leiria",
-        "name": "PORTUGAL - Leiria - Instituto Politécnico de Leiria",
-        "seasons": [
-          {
-            "id": "143",
-            "name": "CIPLE setembro 2026 (apenas Portugal)",
-            "date_ciple": "2026-09-19"
-          }
-        ]
-      },
-      {
         "id": "4001",
         "city": "Lisboa",
         "name": "PORTUGAL - Lisboa - Universidade de Lisboa",
@@ -40,5 +28,5 @@
       }
     ]
   },
-  "last_checked": "2026-07-09 10:23 UTC"
+  "last_checked": "2026-07-09 13:48 UTC"
 }
