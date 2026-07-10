@@ -13,6 +13,7 @@ from pathlib import Path
 # Persists the last-known list of centers so we can detect changes between runs
 STATE_FILE = Path("state.json")
 REGISTRATION_URL = "https://caple.letras.ulisboa.pt/inscricao"
+LANDING_PAGE_URL = "https://jaredcunha.github.io/ciple-alert/"
 # API endpoint that returns exam centers filtered by country and exam type
 CENTERS_URL = (
     "https://caple.letras.ulisboa.pt/centers/getCentersExamsByCountry.json"
@@ -128,7 +129,7 @@ def send_email(subject, body):
             smtp.starttls()
             smtp.login(gmail_user, gmail_password)
             # Carrier gateways truncate long messages and ignore the subject, so keep it short
-            sms_body = f"{subject}\n{REGISTRATION_URL}"[:280]
+            sms_body = f"{subject}\n{LANDING_PAGE_URL}"[:280]
             _send_message(smtp, gmail_user, notify_sms, "", sms_body)
         print(f"SMS sent to {notify_sms}")
 
