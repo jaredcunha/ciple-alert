@@ -27,18 +27,6 @@
         ]
       },
       {
-        "id": "4004",
-        "city": "Lisboa",
-        "name": "PORTUGAL - Lisboa -  Universidade Nova de Lisboa",
-        "seasons": [
-          {
-            "id": "143",
-            "name": "CIPLE setembro 2026 (apenas Portugal)",
-            "date_ciple": "2026-09-19"
-          }
-        ]
-      },
-      {
         "id": "4001",
         "city": "Lisboa",
         "name": "PORTUGAL - Lisboa - Universidade de Lisboa",
@@ -52,5 +40,5 @@
       }
     ]
   },
-  "last_checked": "2026-07-10 04:50 UTC"
+  "last_checked": "2026-07-10 08:20 UTC"
 }
