@@ -122,7 +122,7 @@ def send_email(subject, body):
     print(f"Email sent to {notify_email}")
 
     if os.environ.get("PUSHOVER_TOKEN"):
-        send_push(f"{subject}\n{REGISTRATION_URL}")
+        send_push(f"{subject}\n{LANDING_PAGE_URL}")
 
 
 def send_push(body):
