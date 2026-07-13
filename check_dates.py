@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Alert when CIPLE exam centers are listed for the United States on CAPLE."""
 
+import base64
 import json
 import os
 import smtplib
 import sys
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
@@ -118,19 +120,33 @@ def send_email(subject, body):
         _send_message(smtp, gmail_user, notify_email, subject, body)
     print(f"Email sent to {notify_email}")
 
-    # Optionally also text a carrier email-to-SMS gateway (e.g. 5551234567@vtext.com),
-    # which delivers as a normal SMS billed at the recipient's standard message rate
-    # instead of going through a paid SMS API.
-    notify_sms = os.environ.get("NOTIFY_SMS")
-    if notify_sms:
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.login(gmail_user, gmail_password)
-            # Carrier gateways truncate long messages and ignore the subject, so keep it short
-            sms_body = f"{subject}\n{REGISTRATION_URL}"[:280]
-            _send_message(smtp, gmail_user, notify_sms, "", sms_body)
-        print(f"SMS sent to {notify_sms}")
+    if os.environ.get("NOTIFY_SMS"):
+        send_sms(f"{subject}\n{REGISTRATION_URL}")
+
+
+def send_sms(body):
+    account_sid = os.environ["TWILIO_ACCOUNT_SID"]
+    auth_token = os.environ["TWILIO_AUTH_TOKEN"]
+    from_number = os.environ["TWILIO_FROM_NUMBER"]
+    to_number = os.environ["NOTIFY_SMS"]
+
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+    data = urllib.parse.urlencode(
+        {"From": from_number, "To": to_number, "Body": body}
+    ).encode("utf-8")
+    credentials = base64.b64encode(f"{account_sid}:{auth_token}".encode("utf-8")).decode("ascii")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Authorization": f"Basic {credentials}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        resp.read()
+    print(f"SMS sent to {to_number} via Twilio")
 
 
 def _send_message(smtp, from_addr, to_addr, subject, body):
