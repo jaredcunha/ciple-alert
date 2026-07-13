@@ -5,6 +5,8 @@ import json
 import os
 import smtplib
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
@@ -119,19 +121,29 @@ def send_email(subject, body):
         _send_message(smtp, gmail_user, notify_email, subject, body)
     print(f"Email sent to {notify_email}")
 
-    # Optionally also text a carrier email-to-SMS gateway (e.g. 5551234567@vtext.com),
-    # which delivers as a normal SMS billed at the recipient's standard message rate
-    # instead of going through a paid SMS API.
-    notify_sms = os.environ.get("NOTIFY_SMS")
-    if notify_sms:
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.login(gmail_user, gmail_password)
-            # Carrier gateways truncate long messages and ignore the subject, so keep it short
-            sms_body = f"{subject}\n{LANDING_PAGE_URL}"[:280]
-            _send_message(smtp, gmail_user, notify_sms, "", sms_body)
-        print(f"SMS sent to {notify_sms}")
+    if os.environ.get("PUSHOVER_TOKEN"):
+        send_push(f"{subject}\n{REGISTRATION_URL}")
+
+
+def send_push(body):
+    token = os.environ["PUSHOVER_TOKEN"]
+    user = os.environ["PUSHOVER_USER"]
+
+    data = urllib.parse.urlencode(
+        {"token": token, "user": user, "title": "CIPLE Alert", "message": body}
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.pushover.net/1/messages.json",
+        data=data,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        print(f"Pushover error {e.code}: {e.read().decode('utf-8')}")
+        raise
+    print("Push notification sent via Pushover")
 
 
 def _send_message(smtp, from_addr, to_addr, subject, body):
