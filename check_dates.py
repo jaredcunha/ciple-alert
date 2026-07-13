@@ -6,6 +6,7 @@ import json
 import os
 import smtplib
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -144,8 +145,12 @@ def send_sms(body):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        print(f"Twilio error {e.code}: {e.read().decode('utf-8')}")
+        raise
     print(f"SMS sent to {to_number} via Twilio")
 
 
