@@ -25,8 +25,20 @@
             "date_ciple": "2026-09-19"
           }
         ]
+      },
+      {
+        "id": "4001",
+        "city": "Lisboa",
+        "name": "PORTUGAL - Lisboa - Universidade de Lisboa",
+        "seasons": [
+          {
+            "id": "143",
+            "name": "CIPLE setembro 2026 (apenas Portugal)",
+            "date_ciple": "2026-09-19"
+          }
+        ]
       }
     ]
   },
-  "last_checked": "2026-07-18 23:51 UTC"
+  "last_checked": "2026-07-19 02:31 UTC"
 }
