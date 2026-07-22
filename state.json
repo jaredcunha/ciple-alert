@@ -1,20 +1,7 @@
 {
   "countries": {
     "69": [],
-    "193": [
-      {
-        "id": "4006",
-        "city": "Faro",
-        "name": "PORTUGAL - Faro - Universidade do Algarve",
-        "seasons": [
-          {
-            "id": "143",
-            "name": "CIPLE setembro 2026 (apenas Portugal)",
-            "date_ciple": "2026-09-19"
-          }
-        ]
-      }
-    ]
+    "193": []
   },
-  "last_checked": "2026-07-22 11:07 UTC"
+  "last_checked": "2026-07-22 13:47 UTC"
 }
