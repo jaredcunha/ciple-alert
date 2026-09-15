@@ -15,18 +15,6 @@
         ]
       },
       {
-        "id": "4062",
-        "city": "Guimarães",
-        "name": "Portugal - Guimarães-Alliance Française de Guimarães",
-        "seasons": [
-          {
-            "id": "138",
-            "name": "Em Portugal e no estrangeiro_2026_novembro",
-            "date_ciple": "2026-11-05"
-          }
-        ]
-      },
-      {
         "id": "4022",
         "city": "Leiria",
         "name": "PORTUGAL - Leiria - Instituto Politécnico de Leiria",
@@ -57,5 +45,5 @@
       }
     ]
   },
-  "last_checked": "2026-09-15 05:48 UTC"
+  "last_checked": "2026-09-15 11:04 UTC"
 }
