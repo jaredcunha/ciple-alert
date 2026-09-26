@@ -23,10 +23,15 @@
             "id": "138",
             "name": "Em Portugal e no estrangeiro_2026_novembro",
             "date_ciple": "2026-11-05"
+          },
+          {
+            "id": "144",
+            "name": "CIPLE outubro 2026(apenas Portugal)",
+            "date_ciple": "2026-10-17"
           }
         ]
       }
     ]
   },
-  "last_checked": "2026-09-25 23:48 UTC"
+  "last_checked": "2026-09-26 03:32 UTC"
 }
