@@ -3,18 +3,6 @@
     "69": [],
     "193": [
       {
-        "id": "4007",
-        "city": "Funchal",
-        "name": "PORTUGAL - Funchal - Academia de Línguas da Madeira",
-        "seasons": [
-          {
-            "id": "144",
-            "name": "CIPLE outubro 2026(apenas Portugal)",
-            "date_ciple": "2026-10-17"
-          }
-        ]
-      },
-      {
         "id": "4001",
         "city": "Lisboa",
         "name": "PORTUGAL - Lisboa - Universidade de Lisboa",
@@ -28,5 +16,5 @@
       }
     ]
   },
-  "last_checked": "2026-10-05 23:44 UTC"
+  "last_checked": "2026-10-06 17:55 UTC"
 }
