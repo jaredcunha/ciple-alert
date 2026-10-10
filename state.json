@@ -1,7 +1,20 @@
 {
   "countries": {
     "69": [],
-    "193": []
+    "193": [
+      {
+        "id": "4001",
+        "city": "Lisboa",
+        "name": "PORTUGAL - Lisboa - Universidade de Lisboa",
+        "seasons": [
+          {
+            "id": "138",
+            "name": "Em Portugal e no estrangeiro_2026_novembro",
+            "date_ciple": "2026-11-05"
+          }
+        ]
+      }
+    ]
   },
-  "last_checked": "2026-10-09 22:15 UTC"
+  "last_checked": "2026-10-10 02:04 UTC"
 }
